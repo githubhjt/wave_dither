@@ -121,6 +121,7 @@ export default function BinaryWave() {
         const t0 = performance.now();
         let grid = null;
         let cols = 0, rows = 0;
+        let cssW = 0, cssH = 0; // logical (CSS pixel) dimensions
 
         function buildGrid(c, r) {
             const g = [];
@@ -139,10 +140,16 @@ export default function BinaryWave() {
         }
 
         function resize() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            cols = Math.ceil(canvas.width / CW) + 1;
-            rows = Math.ceil(canvas.height / CH) + 1;
+            // Render at full device-pixel resolution for crisp text on any display
+            const dpr = window.devicePixelRatio || 1;
+            cssW = window.innerWidth;
+            cssH = window.innerHeight;
+            canvas.width = Math.round(cssW * dpr);
+            canvas.height = Math.round(cssH * dpr);
+            // Draw in CSS-pixel coordinates; the transform scales up to device pixels
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            cols = Math.ceil(cssW / CW) + 1;
+            rows = Math.ceil(cssH / CH) + 1;
             grid = buildGrid(cols, rows);
         }
         resize();
@@ -152,11 +159,11 @@ export default function BinaryWave() {
             const t = (performance.now() - t0) / 1000;
 
             ctx.fillStyle = '#000';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillRect(0, 0, cssW, cssH);
 
             if (!grid) { raf = requestAnimationFrame(render); return; }
 
-            const aspect = canvas.width / canvas.height;
+            const aspect = cssW / cssH;
 
             // Build the set of currently-visible waves with natural motion
             const activeWaves = [];
@@ -220,7 +227,7 @@ export default function BinaryWave() {
             ctx.font = '13px monospace';
             ctx.textBaseline = 'top';
             ctx.textAlign = 'right';
-            ctx.fillText(`${formatTime(t)}  ${labels}`, canvas.width - 16, 14);
+            ctx.fillText(`${formatTime(t)}  ${labels}`, cssW - 16, 14);
 
             raf = requestAnimationFrame(render);
         }
