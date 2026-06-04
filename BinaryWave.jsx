@@ -82,7 +82,7 @@ function foamDensity(nx, ny, crest, strength, waveIdx, t, morph) {
     // Distance into the wet wake (ocean side / above the crest)
     const d = edge - ny;
 
-    const L = 0.68 * (1 + morph * 0.25); // wake widens/sprawls when receding
+    const L = 0.80 * (1 + morph * 0.25); // wake widens/sprawls when receding
     if (d < -0.015 || d > L) return 0;
 
     // Overall sheet envelope: dense at crest, thinning into the wake
@@ -96,8 +96,10 @@ function foamDensity(nx, ny, crest, strength, waveIdx, t, morph) {
     const crestBand = Math.exp(-(d * d) / (2 * 0.045 * 0.045));
     const crestFoam = crestBand * (0.45 + 0.6 * fbm(nx * 13.0 + waveIdx * 7.0, ny * 13.0 + adv)) * (1 - morph * 0.7);
 
-    // Foam patches — get patchier/sparser (more broken) as the wave recedes
-    const foam = body * smoothstep(0.28 + morph * 0.18, 0.70, turb);
+    // Foam patches — base density fills the body, turbulence adds variation.
+    // Gets patchier/sparser (more broken) as the wave recedes.
+    const base = 0.35 * (1 - morph * 0.4);
+    const foam = body * (base + (1 - base) * smoothstep(0.28 + morph * 0.18, 0.70, turb));
 
     const dens = (foam + crestFoam) * strength;
     return dens > 1 ? 1 : dens;
