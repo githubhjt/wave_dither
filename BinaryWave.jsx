@@ -3,7 +3,7 @@ import { useRef, useEffect } from 'react';
 const CW = 14;
 const CH = 16;
 const FS = 14;
-const WAVE_TRAVEL_TIME = 1.05;
+const WAVE_TRAVEL_TIME = 1.05; // top -> bottom (uprush)
 
 const WAVE_TIMINGS = [
     1.855, 5.158, 8.974, 12.22, 15.955, 20.503, 24.874, 28.433, 32.374, 36.015,
@@ -26,6 +26,31 @@ function smoothstep(e0, e1, x) {
     return t * t * (3 - 2 * t);
 }
 
+// --- Value noise / fBm for organic foam turbulence ---
+function vhash(x, y) {
+    const h = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+    return h - Math.floor(h);
+}
+function vnoise(x, y) {
+    const xi = Math.floor(x), yi = Math.floor(y);
+    const xf = x - xi, yf = y - yi;
+    const u = xf * xf * (3 - 2 * xf);
+    const v = yf * yf * (3 - 2 * yf);
+    const a = vhash(xi, yi);
+    const b = vhash(xi + 1, yi);
+    const c = vhash(xi, yi + 1);
+    const d = vhash(xi + 1, yi + 1);
+    return a * (1 - u) * (1 - v) + b * u * (1 - v) + c * (1 - u) * v + d * u * v;
+}
+function fbm(x, y) {
+    return (
+        vnoise(x, y) * 0.5 +
+        vnoise(x * 2.03, y * 2.03) * 0.25 +
+        vnoise(x * 4.01, y * 4.01) * 0.125 +
+        vnoise(x * 8.0, y * 8.0) * 0.0625
+    );
+}
+
 function cellHash(col, row, seed) {
     let h = ((col * 374761393 + row * 668265263 + seed * 2654435761) | 0);
     h = (h ^ (h >>> 13)) | 0;
@@ -33,40 +58,40 @@ function cellHash(col, row, seed) {
     return ((h >>> 0) & 0xffff) / 0xffff;
 }
 
-const WAVE_SPEED = 0.12;
+// Foam density at a point for one wave.
+// crest = leading-edge y position (0 top / ocean .. 1 bottom / shore)
+// receding = true while the wave is washing back toward the ocean
+function foamDensity(nx, ny, crest, receding, strength, waveIdx, t) {
+    // Irregular, curving crest line (not a straight horizontal bar)
+    const wob = (
+        Math.sin(nx * 5.0 + waveIdx * 1.3) * 0.5 +
+        Math.sin(nx * 11.0 + waveIdx * 2.1) * 0.3 +
+        Math.sin(nx * 23.0 + waveIdx * 4.7) * 0.2
+    ) * 0.03;
+    const edge = crest + wob;
 
-function waveIntensity(nx, ny, wavePos, waveIdx, t, sigma, strength) {
-    const xOff = waveIdx * 1.618;
-    const flow = -(ny - wavePos) + t * WAVE_SPEED + xOff;
+    // Distance behind the crest, into the wet wake
+    const d = receding ? (ny - edge) : (edge - ny);
 
-    const xWarp = (
-        Math.sin(nx * 4.0 + flow * 2.1 + xOff) * 0.5 +
-        Math.sin(nx * 9.7 + flow * 3.8 + xOff * 0.7) * 0.3 +
-        Math.sin(nx * 19.1 + flow * 7.3 + xOff * 0.3) * 0.2
-    ) * 0.15;
+    const L = receding ? 0.28 : 0.44; // wake length (shorter when draining)
+    if (d < -0.015 || d > L) return 0;
 
-    const w1 = Math.sin(flow * Math.PI * 2.0 + xWarp * Math.PI * 2.0) * 0.5 + 0.5;
-    const w2 = Math.sin(flow * Math.PI * 2.0 * 2.3 + xWarp * Math.PI * 3.0 + 1.0) * 0.3 + 0.5;
-    const w3 = Math.sin(
-        flow * Math.PI * 2.0 * 0.7 +
-        (Math.sin(nx * 2.3 + flow * 1.5 + xOff * 0.5) * 0.7 +
-            Math.sin(nx * 5.7 + flow * 3.1 + xOff * 0.2) * 0.3) * 3.0
-    ) * 0.4 + 0.5;
+    // Overall sheet envelope: dense at crest, thinning into the wake
+    const body = smoothstep(L, 0.0, d);
 
-    const foam = (
-        Math.abs(Math.sin(nx * 2.1 + flow * 5.3)) * 0.500 +
-        Math.abs(Math.sin(nx * 4.3 + flow * 10.7)) * 0.250 +
-        Math.abs(Math.sin(nx * 8.7 + flow * 21.3)) * 0.125 +
-        Math.abs(Math.sin(nx * 17.3 + flow * 42.7)) * 0.0625
-    ) * 0.4;
+    // Turbulence advected along with the wave so foam travels, not flickers
+    const adv = (receding ? crest : -crest) * 5.0;
+    const turb = fbm(nx * 7.0 + waveIdx * 10.0, ny * 9.0 + adv + t * 0.6);
 
-    const f = w1 * 0.4 + w2 * 0.25 + w3 * 0.2 + foam * 0.35;
-    const pattern = smoothstep(0.3, 0.85, f);
+    // Bright, broken foam line right at the leading edge
+    const crestBand = Math.exp(-(d * d) / (2 * 0.045 * 0.045));
+    const crestFoam = crestBand * (0.45 + 0.6 * fbm(nx * 13.0 + waveIdx * 7.0, ny * 13.0 + adv));
 
-    const dy = ny - wavePos;
-    const envelope = Math.exp(-dy * dy / (2 * sigma * sigma));
+    // Foam patches form where turbulence is high within the wet body
+    const foam = body * smoothstep(0.28, 0.70, turb);
 
-    return pattern * envelope * strength;
+    const dens = (foam + crestFoam) * strength;
+    return dens > 1 ? 1 : dens;
 }
 
 function formatTime(s) {
@@ -93,7 +118,7 @@ export default function BinaryWave() {
                 for (let col = 0; col < c; col++) {
                     g[row][col] = {
                         char: cellHash(col, row, 0) < 0.5 ? '0' : '1',
-                        thr: 0.30 + cellHash(col, row, 1) * 0.60,
+                        thr: 0.25 + cellHash(col, row, 1) * 0.55,
                     };
                 }
             }
@@ -120,30 +145,29 @@ export default function BinaryWave() {
 
             const aspect = canvas.width / canvas.height;
 
-            // Collect active waves with forward + recede phases
+            // Build the set of currently-visible waves with natural motion
             const activeWaves = [];
             for (let i = 0; i < WAVE_TIMINGS.length; i++) {
                 const elapsed = t - WAVE_TIMINGS[i];
-                if (elapsed < -0.3) continue;
+                if (elapsed < 0) continue;
 
                 if (elapsed <= WAVE_TRAVEL_TIME) {
-                    // Forward: top → bottom in 1.05s
-                    const pos = elapsed / WAVE_TRAVEL_TIME;
-                    if (pos >= -0.3 && pos <= 1.3) {
-                        activeWaves.push({ pos, idx: i, sigma: 0.28, strength: 1.0 });
-                    }
+                    // Uprush: top -> bottom, decelerating (easeOut)
+                    const u = elapsed / WAVE_TRAVEL_TIME;
+                    const front = 1 - (1 - u) * (1 - u);
+                    activeWaves.push({ crest: front, receding: false, strength: 1.0, idx: i });
                 } else {
-                    // Recede: bottom → top, lasts until next wave starts
+                    // Backwash: bottom -> top, accelerating (easeIn) and fading
                     const nextWt = i + 1 < WAVE_TIMINGS.length
                         ? WAVE_TIMINGS[i + 1]
-                        : WAVE_TIMINGS[i] + WAVE_TRAVEL_TIME + 4.0;
-                    const recedeDuration = nextWt - WAVE_TIMINGS[i] - WAVE_TRAVEL_TIME;
-                    const recedeProgress = (elapsed - WAVE_TRAVEL_TIME) / recedeDuration;
-                    if (recedeProgress < 1.0) {
-                        const pos = 1.0 - recedeProgress;
-                        const strength = 1.0 - recedeProgress; // fades as it recedes
-                        activeWaves.push({ pos, idx: i, sigma: 0.35, strength });
-                    }
+                        : WAVE_TIMINGS[i] + WAVE_TRAVEL_TIME + 3.0;
+                    let recedeDur = nextWt - WAVE_TIMINGS[i] - WAVE_TRAVEL_TIME;
+                    recedeDur = Math.max(0.4, Math.min(3.0, recedeDur));
+                    const r = (elapsed - WAVE_TRAVEL_TIME) / recedeDur;
+                    if (r >= 1) continue;
+                    const front = 1 - r * r;        // retreat upward, speeding up
+                    const strength = (1 - r) * 0.75; // dissipate
+                    activeWaves.push({ crest: front, receding: true, strength, idx: i });
                 }
             }
 
@@ -158,8 +182,8 @@ export default function BinaryWave() {
                     for (let c = 0; c < cols; c++) {
                         const nx = (c / cols - 0.5) * aspect;
                         let maxF = 0;
-                        for (const wave of activeWaves) {
-                            const f = waveIntensity(nx, ny, wave.pos, wave.idx, t, wave.sigma, wave.strength);
+                        for (const w of activeWaves) {
+                            const f = foamDensity(nx, ny, w.crest, w.receding, w.strength, w.idx, t);
                             if (f > maxF) maxF = f;
                         }
                         if (maxF > grid[r][c].thr) {
@@ -169,13 +193,13 @@ export default function BinaryWave() {
                 }
             }
 
-            // Timer overlay (top-right)
-            const waveLabels = activeWaves.map(w => `#${w.idx + 1}`).join(' ');
+            // Timer overlay (top-right) — for timing verification
+            const labels = activeWaves.map(w => `#${w.idx + 1}${w.receding ? '↑' : '↓'}`).join(' ');
             ctx.fillStyle = 'rgba(255,255,255,0.75)';
             ctx.font = '13px monospace';
             ctx.textBaseline = 'top';
             ctx.textAlign = 'right';
-            ctx.fillText(`${formatTime(t)}  ${waveLabels}`, canvas.width - 16, 14);
+            ctx.fillText(`${formatTime(t)}  ${labels}`, canvas.width - 16, 14);
 
             raf = requestAnimationFrame(render);
         }
