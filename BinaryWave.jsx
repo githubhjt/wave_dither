@@ -1,8 +1,8 @@
 import { useRef, useEffect } from 'react';
 
-const CW = 9;
-const CH = 10;
-const FS = 9;
+const CW = 14;
+const CH = 16;
+const FS = 14;
 const WAVE_TRAVEL_TIME = 1.05;
 
 const WAVE_TIMINGS = [
