@@ -69,7 +69,7 @@ function waveIntensity(nx, ny, wavePos, waveIdx, t) {
 
     // Gaussian envelope — localizes pattern to this wave's y-position
     const dy = ny - wavePos;
-    const envelope = Math.exp(-dy * dy / (2 * 0.12 * 0.12));
+    const envelope = Math.exp(-dy * dy / (2 * 0.28 * 0.28));
 
     return pattern * envelope;
 }
