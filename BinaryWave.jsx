@@ -6,7 +6,7 @@ const REF_HEIGHT = 1300; // reference height (1440x810, 16:9)
 const BASE_CW = 14;
 const BASE_CH = 16;
 const BASE_FS = 14;
-const WAVE_TRAVEL_TIME = 1.05; // top -> bottom (uprush)
+const WAVE_TRAVEL_TIME = 1.5; // top -> bottom (uprush)
 const RUNUP_PEAK = 0.9; // max reach before receding (stays just short of bottom edge)
 
 const WAVE_TIMINGS = [
