@@ -170,7 +170,7 @@ export default function BinaryWave() {
                     const r = (elapsed - WAVE_TRAVEL_TIME) / recedeDur;
                     if (r >= 1) continue;
                     const front = RUNUP_PEAK * (1 - r * r); // retreat upward from peak, speeding up
-                    const strength = (1 - r) * 0.75;        // dissipate
+                    const strength = 1 - r * r;             // dissipate, continuous from 1.0 at peak
                     activeWaves.push({ crest: front, receding: true, strength, idx: i });
                 }
             }
