@@ -1,8 +1,11 @@
 import { useRef, useEffect } from 'react';
 
-const CW = 14;
-const CH = 16;
-const FS = 14;
+// Base cell/font sizes defined at a reference width; scaled to the actual
+// screen so the 0/1 size stays proportional on any display.
+const REF_WIDTH = 1440;
+const BASE_CW = 14;
+const BASE_CH = 16;
+const BASE_FS = 14;
 const WAVE_TRAVEL_TIME = 1.05; // top -> bottom (uprush)
 const RUNUP_PEAK = 0.9; // max reach before receding (stays just short of bottom edge)
 
@@ -121,7 +124,8 @@ export default function BinaryWave() {
         const t0 = performance.now();
         let grid = null;
         let cols = 0, rows = 0;
-        let cssW = 0, cssH = 0; // logical (CSS pixel) dimensions
+        let cssW = 0, cssH = 0;  // logical (CSS pixel) dimensions
+        let cw = 0, ch = 0, fs = 0; // screen-scaled cell/font sizes
 
         function buildGrid(c, r) {
             const g = [];
@@ -148,8 +152,13 @@ export default function BinaryWave() {
             canvas.height = Math.round(cssH * dpr);
             // Draw in CSS-pixel coordinates; the transform scales up to device pixels
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            cols = Math.ceil(cssW / CW) + 1;
-            rows = Math.ceil(cssH / CH) + 1;
+            // Scale cell/font size proportionally to screen width
+            const scale = Math.max(0.5, Math.min(3, cssW / REF_WIDTH));
+            cw = BASE_CW * scale;
+            ch = BASE_CH * scale;
+            fs = BASE_FS * scale;
+            cols = Math.ceil(cssW / cw) + 1;
+            rows = Math.ceil(cssH / ch) + 1;
             grid = buildGrid(cols, rows);
         }
         resize();
@@ -192,7 +201,7 @@ export default function BinaryWave() {
             }
 
             if (activeWaves.length > 0) {
-                ctx.font = `${FS}px "Courier New", monospace`;
+                ctx.font = `${fs}px "Courier New", monospace`;
                 ctx.textBaseline = 'top';
                 ctx.textAlign = 'left';
                 ctx.fillStyle = '#fff';
@@ -208,7 +217,7 @@ export default function BinaryWave() {
                         }
                         const cell = grid[r][c];
                         if (maxF > cell.thr) {
-                            const x = c * CW, y = r * CH;
+                            const x = c * cw, y = r * ch;
                             // bright foam sparkle: overlap 0 and 1 where foam is dense
                             if (cell.sparkle && maxF > 0.5) {
                                 ctx.fillText('0', x, y);
