@@ -61,8 +61,9 @@ function cellHash(col, row, seed) {
 
 // Foam density at a point for one wave.
 // crest = leading-edge y position (0 top / ocean .. 1 bottom / shore)
-// receding = true while the wave is washing back toward the ocean
-function foamDensity(nx, ny, crest, receding, strength, waveIdx, t) {
+// The wake always trails toward the ocean (above the crest) so the foam
+// stays one continuous sheet whether the wave is advancing or receding.
+function foamDensity(nx, ny, crest, strength, waveIdx, t) {
     // Irregular, curving crest line (not a straight horizontal bar)
     const wob = (
         Math.sin(nx * 5.0 + waveIdx * 1.3) * 0.5 +
@@ -71,17 +72,17 @@ function foamDensity(nx, ny, crest, receding, strength, waveIdx, t) {
     ) * 0.03;
     const edge = crest + wob;
 
-    // Distance behind the crest, into the wet wake
-    const d = receding ? (ny - edge) : (edge - ny);
+    // Distance into the wet wake (ocean side / above the crest)
+    const d = edge - ny;
 
-    const L = receding ? 0.28 : 0.44; // wake length (shorter when draining)
+    const L = 0.44; // wake length
     if (d < -0.015 || d > L) return 0;
 
     // Overall sheet envelope: dense at crest, thinning into the wake
     const body = smoothstep(L, 0.0, d);
 
-    // Turbulence advected along with the wave so foam travels, not flickers
-    const adv = (receding ? crest : -crest) * 5.0;
+    // Turbulence advected with the crest position (continuous across reversal)
+    const adv = -crest * 5.0;
     const turb = fbm(nx * 7.0 + waveIdx * 10.0, ny * 9.0 + adv + t * 0.6);
 
     // Bright, broken foam line right at the leading edge
@@ -184,7 +185,7 @@ export default function BinaryWave() {
                         const nx = (c / cols - 0.5) * aspect;
                         let maxF = 0;
                         for (const w of activeWaves) {
-                            const f = foamDensity(nx, ny, w.crest, w.receding, w.strength, w.idx, t);
+                            const f = foamDensity(nx, ny, w.crest, w.strength, w.idx, t);
                             if (f > maxF) maxF = f;
                         }
                         if (maxF > grid[r][c].thr) {
