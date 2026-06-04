@@ -230,13 +230,23 @@ export default function BinaryWave() {
                 }
             }
 
-            // Timer overlay (top-right) — for timing verification
+            // Timer overlay (top-right) — always shown, for timing verification
             const labels = activeWaves.map(w => `#${w.idx + 1}${w.receding ? '↑' : '↓'}`).join(' ');
-            ctx.fillStyle = 'rgba(255,255,255,0.75)';
+            const timerText = `${formatTime(t)}  ${labels}`;
             ctx.font = '13px monospace';
             ctx.textBaseline = 'top';
             ctx.textAlign = 'right';
-            ctx.fillText(`${formatTime(t)}  ${labels}`, cssW - 16, 14);
+
+            // Semi-transparent background box behind the timer
+            const pad = 8;
+            const tw = ctx.measureText(timerText).width;
+            const boxX = cssW - 16 - tw - pad;
+            const boxY = 14 - pad;
+            ctx.fillStyle = 'rgba(0,0,0,0.55)';
+            ctx.fillRect(boxX, boxY, tw + pad * 2, 13 + pad * 2);
+
+            ctx.fillStyle = 'rgba(255,255,255,0.9)';
+            ctx.fillText(timerText, cssW - 16, 14);
 
             raf = requestAnimationFrame(render);
         }
