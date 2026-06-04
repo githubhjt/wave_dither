@@ -121,6 +121,8 @@ export default function BinaryWave() {
                     g[row][col] = {
                         char: cellHash(col, row, 0) < 0.5 ? '0' : '1',
                         thr: 0.25 + cellHash(col, row, 1) * 0.55,
+                        // sparse cells that draw 0 AND 1 overlapped -> bright foam sparkle
+                        sparkle: cellHash(col, row, 2) < 0.10,
                     };
                 }
             }
@@ -188,8 +190,16 @@ export default function BinaryWave() {
                             const f = foamDensity(nx, ny, w.crest, w.strength, w.idx, t);
                             if (f > maxF) maxF = f;
                         }
-                        if (maxF > grid[r][c].thr) {
-                            ctx.fillText(grid[r][c].char, c * CW, r * CH);
+                        const cell = grid[r][c];
+                        if (maxF > cell.thr) {
+                            const x = c * CW, y = r * CH;
+                            // bright foam sparkle: overlap 0 and 1 where foam is dense
+                            if (cell.sparkle && maxF > 0.6) {
+                                ctx.fillText('0', x, y);
+                                ctx.fillText('1', x, y);
+                            } else {
+                                ctx.fillText(cell.char, x, y);
+                            }
                         }
                     }
                 }
