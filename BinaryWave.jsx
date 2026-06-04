@@ -21,6 +21,11 @@ const WAVE_TIMINGS = [
     474.187, 477.679, 481.745, 486.029, 490.338,
 ];
 
+function smoothstep(e0, e1, x) {
+    const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0)));
+    return t * t * (3 - 2 * t);
+}
+
 function cellHash(col, row, seed) {
     let h = ((col * 374761393 + row * 668265263 + seed * 2654435761) | 0);
     h = (h ^ (h >>> 13)) | 0;
@@ -28,23 +33,45 @@ function cellHash(col, row, seed) {
     return ((h >>> 0) & 0xffff) / 0xffff;
 }
 
-function waveIntensity(nx, ny, wavePos, waveIdx) {
-    const xPhase = waveIdx * 2.3987;
-    const xWarp = (
-        Math.sin(nx * 5.1 + xPhase) * 0.5 +
-        Math.sin(nx * 11.3 + xPhase * 1.7) * 0.3 +
-        Math.sin(nx * 23.7 + xPhase * 0.9) * 0.2
-    ) * 0.06;
+const WAVE_SPEED = 0.12;
 
-    const dy = ny - wavePos + xWarp;
-    const core = Math.exp(-dy * dy / (2 * 0.10 * 0.10));
+function waveIntensity(nx, ny, wavePos, waveIdx, t) {
+    // Per-wave phase offset for visual variety between waves
+    const xOff = waveIdx * 1.618;
+
+    // Temporal animation at same speed as old code (0.12 units/sec)
+    // Pattern is centered on wavePos spatially
+    const flow = -(ny - wavePos) + t * WAVE_SPEED + xOff;
+
+    const xWarp = (
+        Math.sin(nx * 4.0 + flow * 2.1 + xOff) * 0.5 +
+        Math.sin(nx * 9.7 + flow * 3.8 + xOff * 0.7) * 0.3 +
+        Math.sin(nx * 19.1 + flow * 7.3 + xOff * 0.3) * 0.2
+    ) * 0.15;
+
+    const w1 = Math.sin(flow * Math.PI * 2.0 + xWarp * Math.PI * 2.0) * 0.5 + 0.5;
+    const w2 = Math.sin(flow * Math.PI * 2.0 * 2.3 + xWarp * Math.PI * 3.0 + 1.0) * 0.3 + 0.5;
+    const w3 = Math.sin(
+        flow * Math.PI * 2.0 * 0.7 +
+        (Math.sin(nx * 2.3 + flow * 1.5 + xOff * 0.5) * 0.7 +
+            Math.sin(nx * 5.7 + flow * 3.1 + xOff * 0.2) * 0.3) * 3.0
+    ) * 0.4 + 0.5;
 
     const foam = (
-        Math.abs(Math.sin(nx * 17.3 + xPhase * 3.1)) * 0.25 +
-        Math.abs(Math.sin(nx * 31.7 + xPhase * 5.7)) * 0.15
-    ) * core * 0.5;
+        Math.abs(Math.sin(nx * 2.1 + flow * 5.3)) * 0.500 +
+        Math.abs(Math.sin(nx * 4.3 + flow * 10.7)) * 0.250 +
+        Math.abs(Math.sin(nx * 8.7 + flow * 21.3)) * 0.125 +
+        Math.abs(Math.sin(nx * 17.3 + flow * 42.7)) * 0.0625
+    ) * 0.4;
 
-    return Math.min(1, core + foam);
+    const f = w1 * 0.4 + w2 * 0.25 + w3 * 0.2 + foam * 0.35;
+    const pattern = smoothstep(0.3, 0.85, f);
+
+    // Gaussian envelope — localizes pattern to this wave's y-position
+    const dy = ny - wavePos;
+    const envelope = Math.exp(-dy * dy / (2 * 0.12 * 0.12));
+
+    return pattern * envelope;
 }
 
 function formatTime(s) {
@@ -98,20 +125,20 @@ export default function BinaryWave() {
 
             const aspect = canvas.width / canvas.height;
 
-            // Collect active waves
+            // Collect active waves (±0.3 margin beyond screen bounds)
             const activeWaves = [];
             for (let i = 0; i < WAVE_TIMINGS.length; i++) {
                 const wavePos = (t - WAVE_TIMINGS[i]) / WAVE_TRAVEL_TIME;
-                if (wavePos >= -0.15 && wavePos <= 1.15) {
+                if (wavePos >= -0.3 && wavePos <= 1.3) {
                     activeWaves.push({ pos: wavePos, idx: i });
                 }
             }
 
             if (activeWaves.length > 0) {
-                ctx.fillStyle = '#fff';
                 ctx.font = `${FS}px "Courier New", monospace`;
                 ctx.textBaseline = 'top';
                 ctx.textAlign = 'left';
+                ctx.fillStyle = '#fff';
 
                 for (let r = 0; r < rows; r++) {
                     const ny = r / rows;
@@ -119,7 +146,7 @@ export default function BinaryWave() {
                         const nx = (c / cols - 0.5) * aspect;
                         let maxF = 0;
                         for (const wave of activeWaves) {
-                            const f = waveIntensity(nx, ny, wave.pos, wave.idx);
+                            const f = waveIntensity(nx, ny, wave.pos, wave.idx, t);
                             if (f > maxF) maxF = f;
                         }
                         if (maxF > grid[r][c].thr) {
@@ -131,12 +158,11 @@ export default function BinaryWave() {
 
             // Timer overlay (top-right)
             const waveLabels = activeWaves.map(w => `#${w.idx + 1}`).join(' ');
-            const timerText = `${formatTime(t)}  ${waveLabels}`;
             ctx.fillStyle = 'rgba(255,255,255,0.75)';
             ctx.font = '13px monospace';
             ctx.textBaseline = 'top';
             ctx.textAlign = 'right';
-            ctx.fillText(timerText, canvas.width - 16, 14);
+            ctx.fillText(`${formatTime(t)}  ${waveLabels}`, canvas.width - 16, 14);
 
             raf = requestAnimationFrame(render);
         }
