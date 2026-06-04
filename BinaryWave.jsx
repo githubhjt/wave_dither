@@ -63,19 +63,26 @@ function cellHash(col, row, seed) {
 // crest = leading-edge y position (0 top / ocean .. 1 bottom / shore)
 // The wake always trails toward the ocean (above the crest) so the foam
 // stays one continuous sheet whether the wave is advancing or receding.
-function foamDensity(nx, ny, crest, strength, waveIdx, t) {
-    // Irregular, curving crest line (not a straight horizontal bar)
+// morph: 0 while advancing, grows 0 -> 1 while receding. Distorts the crest
+// so the wave breaks up instead of returning in its exact shape.
+function foamDensity(nx, ny, crest, strength, waveIdx, t, morph) {
+    // Irregular, curving crest line — wobble amplitude grows as it recedes
+    const wobAmp = 0.03 * (1 + morph * 2.2);
     const wob = (
         Math.sin(nx * 5.0 + waveIdx * 1.3) * 0.5 +
         Math.sin(nx * 11.0 + waveIdx * 2.1) * 0.3 +
         Math.sin(nx * 23.0 + waveIdx * 4.7) * 0.2
-    ) * 0.03;
-    const edge = crest + wob;
+    ) * wobAmp;
+
+    // Extra jagged, noisy breakup of the edge that only appears when receding
+    const breakup = (fbm(nx * 9.0 + waveIdx * 3.0, t * 0.5) - 0.5) * morph * 0.14;
+
+    const edge = crest + wob + breakup;
 
     // Distance into the wet wake (ocean side / above the crest)
     const d = edge - ny;
 
-    const L = 0.68; // wake length
+    const L = 0.68 * (1 + morph * 0.25); // wake widens/sprawls when receding
     if (d < -0.015 || d > L) return 0;
 
     // Overall sheet envelope: dense at crest, thinning into the wake
@@ -85,12 +92,12 @@ function foamDensity(nx, ny, crest, strength, waveIdx, t) {
     const adv = -crest * 5.0;
     const turb = fbm(nx * 7.0 + waveIdx * 10.0, ny * 9.0 + adv + t * 0.6);
 
-    // Bright, broken foam line right at the leading edge
+    // Bright foam line at the leading edge — dissolves as the wave recedes
     const crestBand = Math.exp(-(d * d) / (2 * 0.045 * 0.045));
-    const crestFoam = crestBand * (0.45 + 0.6 * fbm(nx * 13.0 + waveIdx * 7.0, ny * 13.0 + adv));
+    const crestFoam = crestBand * (0.45 + 0.6 * fbm(nx * 13.0 + waveIdx * 7.0, ny * 13.0 + adv)) * (1 - morph * 0.7);
 
-    // Foam patches form where turbulence is high within the wet body
-    const foam = body * smoothstep(0.28, 0.70, turb);
+    // Foam patches — get patchier/sparser (more broken) as the wave recedes
+    const foam = body * smoothstep(0.28 + morph * 0.18, 0.70, turb);
 
     const dens = (foam + crestFoam) * strength;
     return dens > 1 ? 1 : dens;
@@ -159,7 +166,7 @@ export default function BinaryWave() {
                     // Uprush: top -> run-up peak, decelerating (easeOut)
                     const u = elapsed / WAVE_TRAVEL_TIME;
                     const front = RUNUP_PEAK * (1 - (1 - u) * (1 - u));
-                    activeWaves.push({ crest: front, receding: false, strength: 1.0, idx: i });
+                    activeWaves.push({ crest: front, receding: false, strength: 1.0, morph: 0, idx: i });
                 } else {
                     // Backwash: run-up peak -> top, accelerating (easeIn) and fading
                     const nextWt = i + 1 < WAVE_TIMINGS.length
@@ -171,7 +178,7 @@ export default function BinaryWave() {
                     if (r >= 1) continue;
                     const front = RUNUP_PEAK * (1 - r * r); // retreat upward from peak, speeding up
                     const strength = 1 - r * r;             // dissipate, continuous from 1.0 at peak
-                    activeWaves.push({ crest: front, receding: true, strength, idx: i });
+                    activeWaves.push({ crest: front, receding: true, strength, morph: r, idx: i });
                 }
             }
 
@@ -187,7 +194,7 @@ export default function BinaryWave() {
                         const nx = (c / cols - 0.5) * aspect;
                         let maxF = 0;
                         for (const w of activeWaves) {
-                            const f = foamDensity(nx, ny, w.crest, w.strength, w.idx, t);
+                            const f = foamDensity(nx, ny, w.crest, w.strength, w.idx, t, w.morph);
                             if (f > maxF) maxF = f;
                         }
                         const cell = grid[r][c];
