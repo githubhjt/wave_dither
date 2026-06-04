@@ -196,7 +196,8 @@ export default function BinaryWave() {
                     if (r >= 1) continue;
                     const front = RUNUP_PEAK * (1 - r * r); // retreat upward from peak, speeding up
                     const strength = 1 - r * r;             // dissipate, continuous from 1.0 at peak
-                    activeWaves.push({ crest: front, receding: true, strength, morph: r, idx: i });
+                    const morph = Math.sqrt(r);             // break up fast early in the recede
+                    activeWaves.push({ crest: front, receding: true, strength, morph, idx: i });
                 }
             }
 
