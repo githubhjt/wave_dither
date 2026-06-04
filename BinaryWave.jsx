@@ -75,7 +75,7 @@ function foamDensity(nx, ny, crest, strength, waveIdx, t) {
     // Distance into the wet wake (ocean side / above the crest)
     const d = edge - ny;
 
-    const L = 0.44; // wake length
+    const L = 0.68; // wake length
     if (d < -0.015 || d > L) return 0;
 
     // Overall sheet envelope: dense at crest, thinning into the wake
