@@ -254,16 +254,27 @@ export default function BinaryWave() {
 
         render();
 
+        // Click anywhere to toggle fullscreen (browsers require a user gesture)
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen?.();
+            } else {
+                document.exitFullscreen?.();
+            }
+        }
+        canvas.addEventListener('click', toggleFullscreen);
+
         return () => {
             cancelAnimationFrame(raf);
             window.removeEventListener('resize', resize);
+            canvas.removeEventListener('click', toggleFullscreen);
         };
     }, []);
 
     return (
         <canvas
             ref={canvasRef}
-            style={{ display: 'block', width: '100vw', height: '100vh' }}
+            style={{ display: 'block', width: '100vw', height: '100vh', cursor: 'pointer' }}
         />
     );
 }
