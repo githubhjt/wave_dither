@@ -4,6 +4,7 @@ const CW = 14;
 const CH = 16;
 const FS = 14;
 const WAVE_TRAVEL_TIME = 1.05; // top -> bottom (uprush)
+const RUNUP_PEAK = 0.9; // max reach before receding (stays just short of bottom edge)
 
 const WAVE_TIMINGS = [
     1.855, 5.158, 8.974, 12.22, 15.955, 20.503, 24.874, 28.433, 32.374, 36.015,
@@ -152,12 +153,12 @@ export default function BinaryWave() {
                 if (elapsed < 0) continue;
 
                 if (elapsed <= WAVE_TRAVEL_TIME) {
-                    // Uprush: top -> bottom, decelerating (easeOut)
+                    // Uprush: top -> run-up peak, decelerating (easeOut)
                     const u = elapsed / WAVE_TRAVEL_TIME;
-                    const front = 1 - (1 - u) * (1 - u);
+                    const front = RUNUP_PEAK * (1 - (1 - u) * (1 - u));
                     activeWaves.push({ crest: front, receding: false, strength: 1.0, idx: i });
                 } else {
-                    // Backwash: bottom -> top, accelerating (easeIn) and fading
+                    // Backwash: run-up peak -> top, accelerating (easeIn) and fading
                     const nextWt = i + 1 < WAVE_TIMINGS.length
                         ? WAVE_TIMINGS[i + 1]
                         : WAVE_TIMINGS[i] + WAVE_TRAVEL_TIME + 3.0;
@@ -165,8 +166,8 @@ export default function BinaryWave() {
                     recedeDur = Math.max(0.4, Math.min(3.0, recedeDur));
                     const r = (elapsed - WAVE_TRAVEL_TIME) / recedeDur;
                     if (r >= 1) continue;
-                    const front = 1 - r * r;        // retreat upward, speeding up
-                    const strength = (1 - r) * 0.75; // dissipate
+                    const front = RUNUP_PEAK * (1 - r * r); // retreat upward from peak, speeding up
+                    const strength = (1 - r) * 0.75;        // dissipate
                     activeWaves.push({ crest: front, receding: true, strength, idx: i });
                 }
             }
