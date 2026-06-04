@@ -35,12 +35,8 @@ function cellHash(col, row, seed) {
 
 const WAVE_SPEED = 0.12;
 
-function waveIntensity(nx, ny, wavePos, waveIdx, t) {
-    // Per-wave phase offset for visual variety between waves
+function waveIntensity(nx, ny, wavePos, waveIdx, t, sigma, strength) {
     const xOff = waveIdx * 1.618;
-
-    // Temporal animation at same speed as old code (0.12 units/sec)
-    // Pattern is centered on wavePos spatially
     const flow = -(ny - wavePos) + t * WAVE_SPEED + xOff;
 
     const xWarp = (
@@ -67,11 +63,10 @@ function waveIntensity(nx, ny, wavePos, waveIdx, t) {
     const f = w1 * 0.4 + w2 * 0.25 + w3 * 0.2 + foam * 0.35;
     const pattern = smoothstep(0.3, 0.85, f);
 
-    // Gaussian envelope — localizes pattern to this wave's y-position
     const dy = ny - wavePos;
-    const envelope = Math.exp(-dy * dy / (2 * 0.28 * 0.28));
+    const envelope = Math.exp(-dy * dy / (2 * sigma * sigma));
 
-    return pattern * envelope;
+    return pattern * envelope * strength;
 }
 
 function formatTime(s) {
@@ -125,12 +120,30 @@ export default function BinaryWave() {
 
             const aspect = canvas.width / canvas.height;
 
-            // Collect active waves (±0.3 margin beyond screen bounds)
+            // Collect active waves with forward + recede phases
             const activeWaves = [];
             for (let i = 0; i < WAVE_TIMINGS.length; i++) {
-                const wavePos = (t - WAVE_TIMINGS[i]) / WAVE_TRAVEL_TIME;
-                if (wavePos >= -0.3 && wavePos <= 1.3) {
-                    activeWaves.push({ pos: wavePos, idx: i });
+                const elapsed = t - WAVE_TIMINGS[i];
+                if (elapsed < -0.3) continue;
+
+                if (elapsed <= WAVE_TRAVEL_TIME) {
+                    // Forward: top → bottom in 1.05s
+                    const pos = elapsed / WAVE_TRAVEL_TIME;
+                    if (pos >= -0.3 && pos <= 1.3) {
+                        activeWaves.push({ pos, idx: i, sigma: 0.28, strength: 1.0 });
+                    }
+                } else {
+                    // Recede: bottom → top, lasts until next wave starts
+                    const nextWt = i + 1 < WAVE_TIMINGS.length
+                        ? WAVE_TIMINGS[i + 1]
+                        : WAVE_TIMINGS[i] + WAVE_TRAVEL_TIME + 4.0;
+                    const recedeDuration = nextWt - WAVE_TIMINGS[i] - WAVE_TRAVEL_TIME;
+                    const recedeProgress = (elapsed - WAVE_TRAVEL_TIME) / recedeDuration;
+                    if (recedeProgress < 1.0) {
+                        const pos = 1.0 - recedeProgress;
+                        const strength = 1.0 - recedeProgress; // fades as it recedes
+                        activeWaves.push({ pos, idx: i, sigma: 0.35, strength });
+                    }
                 }
             }
 
@@ -146,7 +159,7 @@ export default function BinaryWave() {
                         const nx = (c / cols - 0.5) * aspect;
                         let maxF = 0;
                         for (const wave of activeWaves) {
-                            const f = waveIntensity(nx, ny, wave.pos, wave.idx, t);
+                            const f = waveIntensity(nx, ny, wave.pos, wave.idx, t, wave.sigma, wave.strength);
                             if (f > maxF) maxF = f;
                         }
                         if (maxF > grid[r][c].thr) {
