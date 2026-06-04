@@ -2,7 +2,7 @@ import { useRef, useEffect } from 'react';
 
 // Base cell/font sizes defined at a reference height; scaled by screen height
 // only (width has no effect) so vertical density stays constant on any display.
-const REF_HEIGHT = 810; // reference height (1440x810, 16:9)
+const REF_HEIGHT = 1300; // reference height (1440x810, 16:9)
 const BASE_CW = 14;
 const BASE_CH = 16;
 const BASE_FS = 14;
