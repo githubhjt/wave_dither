@@ -1,8 +1,8 @@
 import { useRef, useEffect } from 'react';
 
-// Base cell/font sizes defined at a reference screen; scaled by the shorter
-// screen edge so the 0/1 size stays proportional and dense on any display.
-const REF_SHORT = 810; // shorter edge of the reference (1440x810, 16:9)
+// Base cell/font sizes defined at a reference height; scaled by screen height
+// only (width has no effect) so vertical density stays constant on any display.
+const REF_HEIGHT = 810; // reference height (1440x810, 16:9)
 const BASE_CW = 14;
 const BASE_CH = 16;
 const BASE_FS = 14;
@@ -152,8 +152,8 @@ export default function BinaryWave() {
             canvas.height = Math.round(cssH * dpr);
             // Draw in CSS-pixel coordinates; the transform scales up to device pixels
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            // Scale cell/font size by the shorter screen edge
-            const scale = Math.max(0.5, Math.min(3, Math.min(cssW, cssH) / REF_SHORT));
+            // Scale cell/font size by screen height only
+            const scale = Math.max(0.5, Math.min(3, cssH / REF_HEIGHT));
             cw = BASE_CW * scale;
             ch = BASE_CH * scale;
             fs = BASE_FS * scale;
