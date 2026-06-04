@@ -85,7 +85,7 @@ function foamDensity(nx, ny, crest, strength, waveIdx, t, morph) {
     // Distance into the wet wake (ocean side / above the crest)
     const d = edge - ny;
 
-    const L = 0.80 * (1 + morph * 0.25); // wake widens/sprawls when receding
+    const L = 0.95 * (1 + morph * 0.25); // wake widens/sprawls when receding
     if (d < -0.015 || d > L) return 0;
 
     // Overall sheet envelope: dense at crest, thinning into the wake
