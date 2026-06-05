@@ -209,9 +209,9 @@ export default function BinaryWave() {
                 // Per-wave variation: small waves stop short & thin, big ones run
                 // further & thicker, with slightly stronger foam.
                 const av = waveAmp(i);                 // 0..1
-                const peak = RUNUP_PEAK * (0.78 + 0.22 * av); // 0.70 .. 0.90 reach
-                const sizeAmp = 0.82 + 0.36 * av;             // 0.82 .. 1.18 thickness
-                const sMul = 0.85 + 0.15 * av;                // 0.85 .. 1.00 strength
+                const peak = RUNUP_PEAK;                      // all waves reach the same end point
+                const sizeAmp = 0.82 + 0.36 * av;             // 0.82 .. 1.18 thickness (varies)
+                const sMul = 0.85 + 0.15 * av;                // 0.85 .. 1.00 strength (varies)
 
                 if (elapsed <= WAVE_TRAVEL_TIME) {
                     // Uprush: top -> run-up peak, decelerating (easeOut)
