@@ -116,7 +116,7 @@ function foamDensity(nx, ny, crest, strength, waveIdx, t, morph, amp) {
 
     // Foam patches — base density fills the body, turbulence adds variation.
     // Gets patchier/sparser (more broken) as the wave recedes.
-    const base = 0.35 * (1 - morph * 0.4);
+    const base = 0.38 * (1 - morph * 0.4);
     let foam = body * (base + (1 - base) * smoothstep(0.28 + morph * 0.18, 0.70, turb));
 
     // Backwash drains into vertical finger-channels (rivulets) as it recedes.
@@ -260,7 +260,7 @@ export default function BinaryWave() {
                                 // Tone by foam density: dim gray (thin body / spray) ->
                                 // bright white (dense crest). Quantized for a clean
                                 // dithered look (4 levels).
-                                const tn = 0.45 + 0.55 * smoothstep(cell.thr, 0.95, maxF);
+                                const tn = 0.55 + 0.45 * smoothstep(cell.thr, 0.95, maxF);
                                 const v = Math.round((Math.round(tn * 5) / 5) * 255);
                                 ctx.fillStyle = `rgb(${v},${v},${v})`;
                                 ctx.fillText(cell.char, x, y);
