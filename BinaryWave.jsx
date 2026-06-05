@@ -119,12 +119,10 @@ function foamDensity(nx, ny, crest, strength, waveIdx, t, morph, amp) {
     const base = 0.35 * (1 - morph * 0.4);
     let foam = body * (base + (1 - base) * smoothstep(0.28 + morph * 0.18, 0.70, turb));
 
-    // Backwash drains into vertical finger-channels (rivulets) as it recedes
-    if (morph > 0.02) {
-        const channels = vnoise(nx * 22.0 + waveIdx * 5.0, ny * 1.5);
-        const rivulet = 1 - morph * 0.85 * smoothstep(0.5, 0.72, channels);
-        foam *= rivulet;
-    }
+    // Backwash drains into vertical finger-channels (rivulets) as it recedes.
+    // Applied continuously (rivulet = 1 when morph = 0) so it fades in smoothly.
+    const channels = vnoise(nx * 22.0 + waveIdx * 5.0, ny * 1.5);
+    foam *= 1 - morph * 0.85 * smoothstep(0.5, 0.72, channels);
 
     const dens = (foam + crestFoam) * strength;
     return dens > 1 ? 1 : dens;
@@ -231,7 +229,7 @@ export default function BinaryWave() {
                     if (r >= 1) continue;
                     const front = peak * (1 - r * r);       // retreat upward from peak, speeding up
                     const strength = sMul * (1 - r * r);    // dissipate, continuous from peak
-                    const morph = Math.sqrt(r);             // break up fast early in the recede
+                    const morph = r * r * (3 - 2 * r);      // ease in breakup smoothly (no pop at peak)
                     activeWaves.push({ crest: front, receding: true, strength, morph, idx: i, amp: sizeAmp });
                 }
             }
