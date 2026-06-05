@@ -240,7 +240,7 @@ export default function BinaryWave() {
                 ctx.textAlign = 'left';
 
                 for (let r = 0; r < rows; r++) {
-                    const ny = r / rows;
+                    const ny = 1 - r / rows; // vertical flip: wave travels bottom -> top
                     for (let c = 0; c < cols; c++) {
                         const nx = (c / cols - 0.5) * aspect;
                         let maxF = 0;
