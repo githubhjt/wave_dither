@@ -72,7 +72,7 @@ function cellHash(col, row, seed) {
 // stays one continuous sheet whether the wave is advancing or receding.
 // morph: 0 while advancing, grows 0 -> 1 while receding. Distorts the crest
 // so the wave breaks up instead of returning in its exact shape.
-function foamDensity(nx, ny, crest, strength, waveIdx, t, morph) {
+function foamDensity(nx, ny, crest, strength, waveIdx, t, morph, amp) {
     // Irregular, curving crest line — wobble amplitude grows as it recedes
     const wobAmp = 0.03 * (1 + morph * 2.2);
     const wob = (
@@ -89,8 +89,19 @@ function foamDensity(nx, ny, crest, strength, waveIdx, t, morph) {
     // Distance into the wet wake (ocean side / above the crest)
     const d = edge - ny;
 
-    const L = 0.95 * (1 + morph * 0.25); // wake widens/sprawls when receding
-    if (d < -0.015 || d > L) return 0;
+    const L = 0.95 * amp * (1 + morph * 0.25); // wake widens/sprawls when receding
+    if (d > L) return 0;
+
+    // --- Spray ahead of the breaking crest (shore side, d < 0) ---
+    // Sparse flecks of foam flung past the leading edge; thins out fast.
+    if (d < 0) {
+        const sprayReach = 0.11 * amp * (1 - morph * 0.6); // less spray once receding
+        if (d < -sprayReach) return 0;
+        const sd = -d / sprayReach; // 0 at crest .. 1 at the spray tip
+        const sprayN = fbm(nx * 30.0 + waveIdx * 9.0, ny * 30.0 - t * 1.8);
+        const spray = (1 - sd) * (1 - sd) * smoothstep(0.60, 0.86, sprayN) * strength;
+        return spray > 1 ? 1 : spray;
+    }
 
     // Overall sheet envelope: dense at crest, thinning into the wake
     const body = smoothstep(L, 0.0, d);
@@ -106,10 +117,23 @@ function foamDensity(nx, ny, crest, strength, waveIdx, t, morph) {
     // Foam patches — base density fills the body, turbulence adds variation.
     // Gets patchier/sparser (more broken) as the wave recedes.
     const base = 0.35 * (1 - morph * 0.4);
-    const foam = body * (base + (1 - base) * smoothstep(0.28 + morph * 0.18, 0.70, turb));
+    let foam = body * (base + (1 - base) * smoothstep(0.28 + morph * 0.18, 0.70, turb));
+
+    // Backwash drains into vertical finger-channels (rivulets) as it recedes
+    if (morph > 0.02) {
+        const channels = vnoise(nx * 22.0 + waveIdx * 5.0, ny * 1.5);
+        const rivulet = 1 - morph * 0.85 * smoothstep(0.5, 0.72, channels);
+        foam *= rivulet;
+    }
 
     const dens = (foam + crestFoam) * strength;
     return dens > 1 ? 1 : dens;
+}
+
+// Deterministic per-wave size factor in [0,1] — varies run-up, thickness and
+// strength so the 125-wave set has a natural mix of big and small waves.
+function waveAmp(idx) {
+    return cellHash(idx, idx * 7 + 3, 9);
 }
 
 function formatTime(s) {
@@ -184,11 +208,18 @@ export default function BinaryWave() {
                 const elapsed = t - WAVE_TIMINGS[i];
                 if (elapsed < 0) continue;
 
+                // Per-wave variation: small waves stop short & thin, big ones run
+                // further & thicker, with slightly stronger foam.
+                const av = waveAmp(i);                 // 0..1
+                const peak = RUNUP_PEAK * (0.78 + 0.22 * av); // 0.70 .. 0.90 reach
+                const sizeAmp = 0.82 + 0.36 * av;             // 0.82 .. 1.18 thickness
+                const sMul = 0.85 + 0.15 * av;                // 0.85 .. 1.00 strength
+
                 if (elapsed <= WAVE_TRAVEL_TIME) {
                     // Uprush: top -> run-up peak, decelerating (easeOut)
                     const u = elapsed / WAVE_TRAVEL_TIME;
-                    const front = RUNUP_PEAK * (1 - (1 - u) * (1 - u));
-                    activeWaves.push({ crest: front, receding: false, strength: 1.0, morph: 0, idx: i });
+                    const front = peak * (1 - (1 - u) * (1 - u));
+                    activeWaves.push({ crest: front, receding: false, strength: sMul, morph: 0, idx: i, amp: sizeAmp });
                 } else {
                     // Backwash: run-up peak -> top, accelerating (easeIn) and fading
                     const nextWt = i + 1 < WAVE_TIMINGS.length
@@ -198,10 +229,10 @@ export default function BinaryWave() {
                     recedeDur = Math.max(0.4, Math.min(3.0, recedeDur));
                     const r = (elapsed - WAVE_TRAVEL_TIME) / recedeDur;
                     if (r >= 1) continue;
-                    const front = RUNUP_PEAK * (1 - r * r); // retreat upward from peak, speeding up
-                    const strength = 1 - r * r;             // dissipate, continuous from 1.0 at peak
+                    const front = peak * (1 - r * r);       // retreat upward from peak, speeding up
+                    const strength = sMul * (1 - r * r);    // dissipate, continuous from peak
                     const morph = Math.sqrt(r);             // break up fast early in the recede
-                    activeWaves.push({ crest: front, receding: true, strength, morph, idx: i });
+                    activeWaves.push({ crest: front, receding: true, strength, morph, idx: i, amp: sizeAmp });
                 }
             }
 
@@ -209,7 +240,6 @@ export default function BinaryWave() {
                 ctx.font = `${fs}px "Courier New", monospace`;
                 ctx.textBaseline = 'top';
                 ctx.textAlign = 'left';
-                ctx.fillStyle = '#fff';
 
                 for (let r = 0; r < rows; r++) {
                     const ny = r / rows;
@@ -217,7 +247,7 @@ export default function BinaryWave() {
                         const nx = (c / cols - 0.5) * aspect;
                         let maxF = 0;
                         for (const w of activeWaves) {
-                            const f = foamDensity(nx, ny, w.crest, w.strength, w.idx, t, w.morph);
+                            const f = foamDensity(nx, ny, w.crest, w.strength, w.idx, t, w.morph, w.amp);
                             if (f > maxF) maxF = f;
                         }
                         const cell = grid[r][c];
@@ -225,9 +255,16 @@ export default function BinaryWave() {
                             const x = c * cw, y = r * ch;
                             // bright foam sparkle: overlap 0 and 1 where foam is dense
                             if (cell.sparkle && maxF > 0.5) {
+                                ctx.fillStyle = '#fff';
                                 ctx.fillText('0', x, y);
                                 ctx.fillText('1', x, y);
                             } else {
+                                // Tone by foam density: dim gray (thin body / spray) ->
+                                // bright white (dense crest). Quantized for a clean
+                                // dithered look (4 levels).
+                                const tn = 0.45 + 0.55 * smoothstep(cell.thr, 0.95, maxF);
+                                const v = Math.round((Math.round(tn * 5) / 5) * 255);
+                                ctx.fillStyle = `rgb(${v},${v},${v})`;
                                 ctx.fillText(cell.char, x, y);
                             }
                         }
