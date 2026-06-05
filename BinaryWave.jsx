@@ -7,7 +7,7 @@ const BASE_CW = 14;
 const BASE_CH = 16;
 const BASE_FS = 14;
 const WAVE_TRAVEL_TIME = 1.5; // top -> bottom (uprush)
-const RUNUP_PEAK = 0.9; // max reach before receding (stays just short of bottom edge)
+const RUNUP_PEAK = 0.98; // max reach before receding (almost to the far edge)
 
 const WAVE_TIMINGS = [
     1.855, 5.158, 8.974, 12.22, 15.955, 20.503, 24.874, 28.433, 32.374, 36.015,
