@@ -25,6 +25,10 @@ const WAVE_TIMINGS = [
     474.187, 477.679, 481.745, 486.029, 490.338,
 ];
 
+// Total cycle length: last wave's start + travel + its full recede (3.0s).
+// After this the timeline wraps to 0 and the 125-wave sequence repeats.
+const LOOP_PERIOD = WAVE_TIMINGS[WAVE_TIMINGS.length - 1] + WAVE_TRAVEL_TIME + 3.0;
+
 function smoothstep(e0, e1, x) {
     const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0)));
     return t * t * (3 - 2 * t);
@@ -165,7 +169,7 @@ export default function BinaryWave() {
         window.addEventListener('resize', resize);
 
         function render() {
-            const t = (performance.now() - t0) / 1000;
+            const t = ((performance.now() - t0) / 1000) % LOOP_PERIOD;
 
             ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, cssW, cssH);
